@@ -151,6 +151,7 @@ def resultsLandmarks(results):
             else: 
                 listResults.append(results.pose_landmarks.landmark[landmarks[i]]) 
             i+=1 
+        # print("listResults", listResults)
         return listResults 
     except:
         return []
@@ -182,8 +183,8 @@ def getImageAngles(f):
         videoAngles.append(calculate_image_angle(24, 26, 28, res)) #right knee 
         videoAngles.append(calculate_image_angle(25, 27, 31, res)) #left shin ankle toes 
         videoAngles.append(calculate_image_angle(26, 28, 32, res)) #right shin ankle toes 
-        return videoAngles 
-    return []
+        return videoAngles
+    return None
 
 def getVideoAngles(v): # v is a string in the form of '.mp4'
     cap = cv2.VideoCapture(v) # Use video file 

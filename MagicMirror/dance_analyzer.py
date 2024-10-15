@@ -1,4 +1,5 @@
 every_nth_frame = True
+show_landmarks = True
 
 import tkinter as tk 
 import cv2 # OpenCV library for image processing. 
@@ -22,7 +23,7 @@ file_path = "Dance.mp4"
 
 json_file_path = file_path + ".json"
 
-print(json_file_path)
+#print(json_file_path)
 
 videoAngles = []
 
@@ -87,10 +88,10 @@ def scoreImage(originalAngles, userAngles):
             differences.append(normalize_angle(diff))
             diff = abs(normalize_angle(diff))
             
-            print("angle_1: {}, angle_2: {}, diff: {}".format(originalAngles[i], userAngles[i], diff))
+            # print("angle_1: {}, angle_2: {}, diff: {}".format(originalAngles[i], userAngles[i], diff))
             # percentage = diff/originalAngles[i] 
             percentage = diff/180
-            print("percentage: {:.0f}".format((1 - percentage)*100))
+            # print("percentage: {:.0f}".format((1 - percentage)*100))
 
             percentage = (1 - percentage)*100
             totalPercentage += percentage 
@@ -143,8 +144,34 @@ process_event = threading.Event()
 # Create a lock
 counter_lock = threading.Lock()
 
+
+mp_drawing = mp.solutions.drawing_utils
+pose_connections = mp.solutions.pose.POSE_CONNECTIONS
+
+def draw_landmarks(image, landmarks, connections=pose_connections):
+    # Convert the image to RGB
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    
+    # Draw landmarks on the image
+    for landmark in landmarks:
+        # print("landmark",landmark)
+        if landmark:
+            x = int(landmark.x * image.shape[1])
+            y = int(landmark.y * image.shape[0])
+            cv2.circle(image, (x, y), 5, (0, 255, 0), 5)
+    print("Drawing on image")
+    
+    # Optionally draw connections between landmarks
+    # if connections:
+    #     mp_drawing.draw_landmarks(image, landmarks, connections)
+    
+    # Convert the image back to BGR
+    image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
+    return image_bgr
+
+
 def process_frame(camera_frame, frameNumber):
-    print("Processing frame:", frameNumber)
+    # print("Processing frame:", frameNumber)
     global danceScore
     imageAngles = sc.getImageAngles(camera_frame)
     # print("imageAngles", imageAngles)
@@ -159,26 +186,32 @@ def process_frame(camera_frame, frameNumber):
 score_list = []
 
 def process_nth_frame(camera_frame, frameNumber):
-    print("Processing nth frame:", frameNumber)
-    global danceScore, score_list, recommendation
-    imageAngles = sc.getImageAngles(camera_frame)
+    # print("Processing nth frame:", frameNumber)
+    global danceScore, score_list, recommendation, users_landmarks
+    imageAngles, landmarks = sc.getImageAngles(camera_frame)
     # print("imageAngles", imageAngles)
     
-    if len(imageAngles) > 0:
+    if imageAngles is not None:
         image1Angles = videoAngles[frameNumber] 
 
         # imageScore = sc.imageScore(imageAngles, image1Angles) 
-        imageScore, partIndex, diff = scoreImage(imageAngles, image1Angles) 
-        with counter_lock:
-            # danceScore += 1
-            recommendation = make_recommendations(partIndex, diff)
-            danceScore += imageScore 
+        try:
+            imageScore, partIndex, diff = scoreImage(imageAngles, image1Angles) 
+            with counter_lock:
+                # danceScore += 1
+                recommendation = make_recommendations(partIndex, diff)
+                danceScore += imageScore 
+                users_landmarks = landmarks
+        except:
+            pass
+
     else:
         with counter_lock:
             recommendation = ""
+            # users_landmarks = landmarks
 
 
-    print("Done processing nth frame:", frameNumber)
+    # print("Done processing nth frame:", frameNumber)
 
 
 
@@ -210,6 +243,7 @@ def placeScore(image, score, recommendation):
 
 danceScore = 0  
 recommendation = ""
+users_landmarks = []
 frameNumber = 0 
 countEveryFrame = 5
 
@@ -227,10 +261,6 @@ while cap.isOpened():
         cv2.waitKey()
         break
 
-    video_frame = resize_image(video_frame, height = frame_height)
-    #camera_frame = resize_image(camera_frame)
-    image = cv2.hconcat([video_frame, camera_frame])
-
 
     if every_nth_frame:
         if frameNumber % countEveryFrame == 0:
@@ -242,20 +272,15 @@ while cap.isOpened():
             process_event.clear()
             threading.Thread(target=process_frame, args=(camera_frame,frameNumber,)).start()
 
-        
-    ''' 
-    ## THIS CASUED STUDDERING
-    if frameNumber % countEveryFrame == 0:
-        imageAngles = sc.getImageAngles(camera_frame)
-        # print("imageAngles", imageAngles)
-        
-        if len(imageAngles) > 0:
-            image1Angles = videoAngles[frameNumber] 
 
-            imageScore = sc.imageScore(imageAngles, image1Angles) 
-            danceScore += imageScore 
-    '''    
-
+    video_frame = resize_image(video_frame, height = frame_height)
+    #camera_frame = resize_image(camera_frame)
+    if show_landmarks:
+        if users_landmarks :
+            draw_landmarks(camera_frame, users_landmarks)
+    
+    image = cv2.hconcat([video_frame, camera_frame])
+        
         
     frameNumber+=1 
     # print("frameNumber:", frameNumber, " - danceScore:", danceScore)
@@ -275,96 +300,3 @@ cap1.release()
 cv2.destroyAllWindows()
 
 exit()
-
-'''
-Old Tinker
-'''
-    
-
-def photo_image(img):
-    h, w = img.shape[:2]
-    data = f'P6 {w} {h} 255 '.encode() + img[..., ::-1].tobytes()
-    return tk.PhotoImage(width=w, height=h, data=data, format='PPM')
-
-
-def update(): #recursive function 
-    global frameNumber 
-    global videoAngles
-    global danceScore
-    
-    # Camera
-    ret,frame = cap.read() # takes frame from webcame and gives it to another function and processes it 
-    # Video File
-    ret1,frame1 = cap1.read() 
- 
-    # print("frame1", frame1)
-    
-    
-    
-    if(not cap1.isOpened()):
-        print("video ended")
-        return
-    
-    # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    # frame1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2RGB) 
-    
-    imageAngles = sc.getImageAngles(frame)
-    image1Angles = videoAngles[frameNumber] 
-
-    imageScore = sc.imageScore(imageAngles, image1Angles) 
-    danceScore += imageScore 
-    
-    # img = Image.fromarray(frame)
-    # img_tk = ImageTk.PhotoImage(image=img) #image displayed in tkinter 
-    # lbl_video.img_tk = img_tk # updating
-    # lbl_video.configure(image=img_tk) 
-
-
-    frame1 = resize_image(frame1)
-    frame = resize_image(frame)
-    
-    # print(frame1.shape)
-    # print(frame.shape)
-
-    photo = photo_image(np.hstack((frame1, frame)))
-    canvas.create_image(0, 0, image=photo, anchor=tk.NW)
-    canvas.image = photo
-    
-    frameNumber+=1 
-    if (frameNumber < len(videoAngles)): 
-        root.after(10, update)
-    else: 
-        print(danceScore)
-    # root.after(10, update)  
-
-#Set up GUI
-root = tk.Tk() 
-root.title("Video Feed in TKinter")
-
-
-canvas = tk.Canvas(root, width=1200, height=700)
-canvas.pack()
-
-
-# Graphics window
-
-
-# imageFrame = tk.Frame(root, width=600, height=500)
-# imageFrame.grid(row=0, column=0, padx=10, pady=2)
-
-#Capture video frames
-# lbl_video = tk.Label(imageFrame)
-# lbl_video.grid(row=0, column=0)
-
-#lbl_video.pack() 
-
-
-
-
-
-
-
-update() 
-root.mainloop() 
-
-
